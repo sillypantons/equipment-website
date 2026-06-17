@@ -1,0 +1,291 @@
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+table { border-collapse: collapse; width: 100%; }
+th { background-color: #f2f2f2; }
+td, th { padding: 10px; text-align: left; }
+tr:hover { background-color: #f5f5f5; }
+
+/* .filter-panel {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+} */
+.filter-group-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6c757d;
+    margin-bottom: 8px;
+}
+/* .checkbox-scroll {
+    max-height: 160px;
+    overflow-y: auto;
+} */
+
+.sort-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-weight: bold;
+    cursor: pointer;
+    color: #0d6efd;
+    text-decoration: underline;
+}
+.sort-btn:hover {
+    color: #0a58ca;
+} 
+
+.type-group {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.group-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background-color: #e9ecef;
+    border: none;
+    border-radius: 0;
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 4px 8px;       /* reduce this to make it smaller */
+    cursor: pointer;
+    color: #495057;
+}
+.group-toggle:hover {
+    background-color: #dee2e6;
+}
+.group-toggle .toggle-arrow {
+    transition: transform 0.2s;
+}
+.group-toggle.collapsed .toggle-arrow {
+    transform: rotate(-90deg);
+}
+</style>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>Equipment Inventory</h1>
+        <div class="d-flex gap-2">
+            <a href="{% url 'request_dashboard' %}" class="btn btn-primary btn-sm">
+                Request Dashboard
+            </a>
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button class="btn btn-danger btn-sm">Logout</button>
+            </form>
+        </div>
+    </div>
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-exclamation-triangle-fill me-2 flex-shrink-0" viewBox="0 0 16 16">
+                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.437-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                </svg>
+                <strong>{{ message }}</strong>
+                <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="get">
+    
+        
+        <div class="row g-2 mb-3 align-items-center">
+            <div class="col-md-6">
+                <input type="text" name="q" class="form-control" placeholder="Search..." value="{{ request.GET.q }}">
+            </div>
+            <!-- Dropdown filters (location) -->
+            <div class="col-md-3">
+                <select name="location" class="form-select">
+                    <option value="" {% if not location_filter %}selected{% endif %}>All Locations</option>
+                    {% for loc in locations %}
+                        <option value="{{ loc }}" {% if location_filter == loc %}selected{% endif %}>
+                            {{ loc }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <a href="/" class="btn btn-secondary">Reset</a>
+            </div>
+        </div>
+
+        <!-- Replace your existing filter panel + table section with this -->
+        <!-- <div class="filter-panel"> -->
+            <div class="row">
+
+                <!-- Left sidebar - Type filters -->
+                <!-- Type checkboxes - grouped and collapsible -->
+                <div class="col-md-3">
+                    <div class="filter-group-title mb-3">Type</div>
+                    {% for group_name, group_types in type_groups.items %}
+                    <div class="type-group mb-3">
+
+                        <!-- Group header - click to collapse -->
+                        <button type="button"
+                                class="group-toggle"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#group-{{ forloop.counter }}">
+                            <span>{{ group_name }}</span>
+                            <span class="toggle-arrow">▾</span>
+                        </button>
+
+                        <!-- Collapsible checkbox list -->
+                        <div class="collapse show" id="group-{{ forloop.counter }}">
+                            <div class="ps-2 pt-1">
+                                {% for t in group_types %}
+                                <div class="form-check">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        name="type"
+                                        value="{{ t }}"
+                                        id="type_{{ t|slugify }}"
+                                        {% if t in selected_types %}checked{% endif %}
+                                    >
+                                    <label class="form-check-label" for="type_{{ t|slugify }}">
+                                        {{ t }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Right side - Table and pagination -->
+                <div class="col-md-9">
+                    <!-- Table -->  
+
+                    <input type="hidden" name="sort" id="sort-input" value="{{ request.GET.sort|default:'SAGE_num' }}">
+                    <input type="hidden" name="direction" id="direction-input" value="{{ request.GET.direction|default:'asc' }}">
+                    
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>
+                                    SAGE Reference
+                                </th>
+                                <th>
+                                    <button type="button" class="sort-btn" data-sort="type">
+                                        Type
+                                        {% if request.GET.sort == 'type' %}
+                                            {% if request.GET.direction == 'asc' %} ↑ {% else %} ↓ {% endif %}
+                                        {% endif %}
+                                    </button>
+                                </th>
+                                <th>
+                                    <button type="button" class="sort-btn" data-sort="location">
+                                        Location
+                                        {% if request.GET.sort == 'location' %}
+                                            {% if request.GET.direction == 'asc' %} ↑ {% else %} ↓ {% endif %}
+                                        {% endif %}
+                                    </button>
+                                </th>
+                                <th>
+                                    <button type="button" class="sort-btn" data-sort="next_service_calc">
+                                        Next Service Date
+                                        {% if request.GET.sort == 'next_service_calc' %}
+                                            {% if request.GET.direction == 'asc' %} ↑ {% else %} ↓ {% endif %}
+                                        {% endif %}
+                                    </button>
+                                </th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in page_obj %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'equipment_detail' item.SAGE_num %}">
+                                        {{ item.SAGE_num }}
+                                    </a>
+                                </td>
+                                <td>{{ item.type }}</td>
+                                <td>{{ item.location }}</td>
+                                <td>{{ item.next_service_calc }}</td>
+                                <td>
+                                    {% if item.days_till_service < 0 %}
+                                        <span class="text-danger">Overdue</span>
+                                    {% elif item.days_till_service < 28 %}
+                                        <span class="text-warning">{{ item.days_till_service }}</span>
+                                    {% else %}
+                                        <span class="text-success">{{ item.days_till_service }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <!-- Pagination (preserve filters in pagination links): -->
+                    <nav class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% for key,value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                                        Previous
+                                    </a>
+                                </li>
+                            {% endif %}
+
+                            <li class="page-item active">
+                                <span class="page-link">
+                                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                </span>
+                            </li>
+
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% for key,value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                                        Next
+                                    </a>
+                                </li>
+                            {% endif %}
+
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+    
+    <!-- Sort script must be inside the form -->
+    <script>
+    document.querySelectorAll('.sort-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const sortInput = document.getElementById('sort-input');
+            const directionInput = document.getElementById('direction-input');
+            const clickedSort = this.dataset.sort;
+
+            if (sortInput.value === clickedSort) {
+                // Same column — flip direction
+                directionInput.value = directionInput.value === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New column — default to ascending
+                sortInput.value = clickedSort;
+                directionInput.value = 'asc';
+            }
+
+            // Reset to page 1 when sorting changes
+            const pageInput = document.querySelector('input[name="page"]');
+            if (pageInput) pageInput.value = 1;
+
+            this.closest('form').submit();
+        });
+    });
+    </script>
+
+    </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

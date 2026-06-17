@@ -1,0 +1,360 @@
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+.btn-orange {
+    background-color: #fd7e14;
+    border-color: #fd7e14;
+    color: white;
+}
+.btn-orange:hover {
+    background-color: #e8710f;
+    border-color: #e8710f;
+    color: white;
+}
+</style>
+
+<div class="container mt-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Equipment Details</h1>
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button class="btn btn-danger btn-sm">Logout</button>
+        </form>
+    </div>
+
+    <!-- Success messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-success">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Details card -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">{{ item.SAGE_num }}</h5>
+            <div class="d-flex gap-2">
+                {% if user.is_staff %}
+                    <a href="{% url 'edit_equipment' item.SAGE_num %}" 
+                    class="btn btn-warning">
+                        Edit Details
+                    </a>
+                {% endif %}
+                <a href="https://forms.office.com/Pages/ResponsePage.aspx?id=CFyjQk7evE6YXxDdMoP3eKg5dDSKwSVAmK5wtbA7icBUNlVBUlJTSzdUMUpTQlQwMzAzOUowVTE0MSQlQCN0PWcu&r7b4a7b8eedab461dac04cc4bffad7ced=%22No%22&rf6db828e0cab47f1a14c983a4fdfacf0=%22Yes%22&ra5f1fc87a11e4744af60f40ab6296365={{ item.SAGE_num }}&r3eb77595b8df4425bc2ee871ff031861=%22{{ item.next_service }}%22"
+                    class="btn btn-primary" 
+                    target="_blank">
+                        Check Sheet
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped mb-0">
+                <tbody>
+                    <tr>
+                        <th style="width: 200px;">Type</th>
+                        <td>{{ item.type }}</td>
+                    </tr>
+                    <tr>
+                        <th>Location</th>
+                        <td>{{ item.location }}</td>
+                    </tr>
+                    <tr>
+                        <th>Days to Next Service</th>
+                        <td>
+                            {% if item.days_till_service < 0 %}
+                                <span class="text-danger">Overdue</span>
+                            {% elif item.days_till_service < 28 %}
+                                <span class="text-warning">{{ item.days_till_service }} days</span>
+                            {% else %}
+                                <span class="text-success">{{ item.days_till_service }} days</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Serial Number</th>
+                        <td>{{ item.serial_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>Purchase Date</th>
+                        <td>{{ item.purchase_date }}</td>
+                    </tr>
+                    <tr>
+                        <th>Last Service</th>
+                        <td>{{ item.last_service }}</td>
+                    </tr>
+                    <tr>
+                        <th>Next Service</th>
+                        <td>{{ item.next_service }}</td>
+                    </tr>
+                    <tr>
+                        <th>Notes</th>
+                        <td>{{ item.notes }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Request form -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Equipment Maintenance Requests</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" id="request-form">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <div class="row g-2 mt-1">
+                    <div class="col">
+                        <button type="button"
+                                id="submit-btn"
+                                class="btn btn-primary w-100"
+                                onclick="handleRequest()">
+                            Submit Request
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>        
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Item History</h5>
+        </div>
+        <div class="card-body">
+            {% if combined_history %}
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Action</th>
+                        <th>Performed By</th>
+                        <th>Details</th>
+                        <th>Status</th>
+                        <th>Date Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in combined_history %}
+                    <tr>
+                        <td>
+                            {% if entry.date %}
+                                {{ entry.date|date:"d M Y H:i" }}
+                            {% elif entry.date_requested %}
+                                {{ entry.date_requested|date:"d M Y H:i" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.action == 'edited' %}
+                                <span class="badge bg-danger">Edited</span>
+                            {% elif entry.action == 'created' %}
+                                <span class="badge bg-secondary">Created</span>
+                            {% elif entry.action == 'serviced' %}
+                                <span class="badge bg-success">Serviced</span>
+
+                            <!-- EquipmentRequest entries use request_type -->
+                            {% elif entry.request_type == 'service' %}
+                                <span class="badge bg-primary">Service Request</span>
+                            {% elif entry.request_type == 'repair' %}
+                                <span class="badge bg-warning text-dark">Repair Request</span>
+                            {% elif entry.request_type == 'other' %}
+                                <span class="badge bg-secondary">Other Request</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Request</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.performed_by %}
+                                {{ entry.performed_by }}
+                            {% else %}
+                                {{ entry.requester_name }}
+                                {% if entry.requester_email %}
+                                    <br><small class="text-muted">{{ entry.requester_email }}</small>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.description %}
+                                <button class="btn btn-sm btn-light"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#history-{{ forloop.counter }}">
+                                    View Details
+                                </button>
+                                <div class="collapse mt-1" id="history-{{ forloop.counter }}">
+                                    <pre class="mb-0 small">{{ entry.description }}</pre>
+                                </div>
+                            {% elif entry.message %}
+                                <button class="btn btn-sm btn-light"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#history-{{ forloop.counter }}">
+                                    View Details
+                                </button>
+                                <div class="collapse mt-1" id="history-{{ forloop.counter }}">
+                                    <pre class="mb-0 small">{{ entry.message }}</pre>
+                                </div>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            {% elif entry.status == 'accepted' %}
+                                <span class="badge bg-success">Accepted</span>
+                            {% elif entry.status == 'rejected' %}
+                                <span class="badge bg-danger">Rejected</span>
+                            {% elif entry.status == 'completed' %}
+                                <span class="badge bg-secondary">Completed</span>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.date_completed %}
+                                {{ entry.date_completed|date:"d M Y" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+                <p class="text-muted mb-0">No history recorded for this equipment yet.</p>
+            {% endif %}
+        </div>
+    </div>
+    <!-- Request history
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Request History</h5>
+        </div>
+        <div class="card-body">
+            {% if request_history %}
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Requested By</th>
+                        <th>Request Type</th>
+                        <th>Message</th>
+                        <th>Date Requested</th>
+                        <th>Status</th>
+                        <th>Date Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in request_history %}
+                    <tr>
+                        <td>{{ req.requester_name }}<br>
+                            <small class="text-muted">{{ req.requester_email }}</small>
+                        </td>
+                        <td>
+                            {% if req.request_type == 'service' %}
+                                <span class="badge bg-primary">Service</span>
+                            {% elif req.request_type == 'repair' %}
+                                <span class="badge bg-warning text-dark">Repair</span>
+                            {% elif req.request_type == 'other' %}
+                                <span class="badge bg-secondary">Other</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark">—</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ req.message }}</td>
+                        <td>{{ req.date_requested|date:"d M Y" }}</td>
+                        <td>
+                            {% if req.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            {% elif req.status == 'accepted' %}
+                                <span class="badge bg-success">Accepted</span>
+                            {% elif req.status == 'rejected' %}
+                                <span class="badge bg-danger">Rejected</span>
+                            {% elif req.status == 'completed' %}
+                                <span class="badge bg-secondary">Completed</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ req.date_completed|date:"d M Y"|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+                <p class="text-muted mb-0">No requests have been made for this equipment yet.</p>
+            {% endif %}
+        </div>
+    </div> -->
+
+    <a href="/" class="btn btn-secondary mb-4">← Back to Inventory</a>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Pass Django URLs into JavaScript -->
+<script>
+    const SERVICE_URL = "https://forms.office.com/Pages/ResponsePage.aspx?id=CFyjQk7evE6YXxDdMoP3eOfTgzbhyddMmThHHH48yTFUNjg5MTM0S0c4SkZXSzExRURJN0pINUVYMy4u&rb4ed3a10fe7c45ccafa9dc14e83334ba=%22North%22&r211c64d5a91d48d7833e6d2983d7fa2d=%22{{ item.type }}%22&r3df52cbf4a7d4eb5afebdce98315ff40={{ item.SAGE_num }}&r99e7fb8366784a59ac57e29676a56332={{ item.serial_number }}&r8a9925a9d3c843c69da8adcc816828e5=%22Service%22";
+    const REPAIR_URL  = "https://forms.office.com/Pages/ResponsePage.aspx?id=CFyjQk7evE6YXxDdMoP3eOfTgzbhyddMmThHHH48yTFUNjg5MTM0S0c4SkZXSzExRURJN0pINUVYMy4u&rb4ed3a10fe7c45ccafa9dc14e83334ba=%22North%22&r211c64d5a91d48d7833e6d2983d7fa2d=%22{{ item.type }}%22&r3df52cbf4a7d4eb5afebdce98315ff40={{ item.SAGE_num }}&r99e7fb8366784a59ac57e29676a56332={{ item.serial_number }}&r8a9925a9d3c843c69da8adcc816828e5=%22Repair%C2%A0%22";
+
+    function handleRequest() {
+        const requestType = document.getElementById('id_request_type').value;
+
+        if (!requestType) {
+            alert('Please select a request type before submitting.');
+            return;
+        }
+
+        // Read live form values at click time
+        const name    = document.getElementById('id_requester_name').value;
+        const message = document.getElementById('id_message').value;
+
+        const encodedName    = encodeURIComponent(name);
+        const encodedMessage = encodeURIComponent(message);
+
+        // Always submit the form to log the request to the dashboard
+        const form = document.getElementById('request-form');
+
+        if (requestType === 'service') {
+            const url = `${SERVICE_URL}&r95633c883ff8490990170c305e2f05c5=${encodedName}&r889e6bb1d22649c6be2a9b85025d1a65=${encodedMessage}`;
+            window.open(url, '_blank');
+            form.submit();
+
+        } else if (requestType === 'repair') {
+            const url = `${REPAIR_URL}&r95633c883ff8490990170c305e2f05c5=${encodedName}&r889e6bb1d22649c6be2a9b85025d1a65=${encodedMessage}`;
+            window.open(url, '_blank');
+            form.submit();
+
+        } else {
+            form.submit();
+        }
+    }
+
+    // Button colour/label update on dropdown change
+    const requestTypeSelect = document.getElementById('id_request_type');
+    const submitBtn = document.getElementById('submit-btn');
+
+    requestTypeSelect.addEventListener('change', function() {
+        const val = this.value;
+        submitBtn.classList.remove('btn-primary', 'btn-warning', 'btn-secondary');
+
+        if (val === 'service') {
+            submitBtn.classList.add('btn-primary');
+            submitBtn.textContent = 'Submit Service Request';
+        } else if (val === 'repair') {
+            submitBtn.classList.add('btn-warning');
+            submitBtn.textContent = 'Submit Repair Request';
+        } else if (val === 'other') {
+            submitBtn.classList.add('btn-secondary');
+            submitBtn.textContent = 'Submit Other Request';
+        } else {
+            submitBtn.classList.add('btn-primary');
+            submitBtn.textContent = 'Submit Request';
+        }
+    });
+</script>
